@@ -1,0 +1,257 @@
+import tkinter as tk
+from tkinter import ttk, messagebox
+import pandas as pd
+import matplotlib.pyplot as plt
+import math
+
+class CorrosaoMonitoramento:
+    metais = {
+        'aço-carbono': {'densidade': 7.85, 'area_padrao': 20},
+        'alumínio': {'densidade': 2.70, 'area_padrao': 20},
+        'cobre': {'densidade': 8.96, 'area_padrao': 20},
+        'zinco': {'densidade': 7.14, 'area_padrao': 20},
+        'ferro': {'densidade': 7.87, 'area_padrao': 20},
+        'latão': {'densidade': 8.44, 'area_padrao': 20},
+        'níquel': {'densidade': 8.90, 'area_padrao': 20},
+        'titânio': {'densidade': 4.51, 'area_padrao': 20}
+    }
+
+    def __init__(self, metal):
+        if metal in self.metais:
+            self.densidade = self.metais[metal]['densidade']
+            self.area_padrao = self.metais[metal]['area_padrao']
+            self.metal = metal
+        else:
+            raise ValueError("Metal não encontrado na biblioteca.")
+        self.dados = []
+
+    def calcular_taxa_corrosao(self, massa_inicial, massa_final, area, tempo, salinidade=0):
+        K = 8.76e4
+        perda_massa = massa_inicial - massa_final
+        taxa_corrosao = (K * perda_massa) / (self.densidade * area * tempo) * (1 + salinidade / 100)
+        return taxa_corrosao
+
+    def classificar_taxa_corrosao(self, taxa_corrosao):
+        if taxa_corrosao < 0.1:
+            return "Baixa"
+        elif 0.1 <= taxa_corrosao < 0.5:
+            return "Moderada"
+        else:
+            return "Alta"
+
+    def sugerir_solucao(self, classificacao):
+        if classificacao == "Baixa":
+            return "Solução sugerida para Baixa taxa de corrosão: Monitoramento regular e manutenção preventiva."
+        elif classificacao == "Moderada":
+            return "Solução sugerida para Moderada taxa de corrosão: Implementação de revestimentos protetivos e inspeções periódicas."
+        elif classificacao == "Alta":
+            return "Solução sugerida para Alta taxa de corrosão: Aplicação de revestimentos mais resistentes e revisão do ambiente de exposição."
+
+    def calcular_pH_saturacao(self, STD, temp_C, Ca_CaCO3, alcalinidade_CaCO3):
+        A = (math.log10(STD) - 1) / 10
+        B = -13.12 * math.log10(temp_C + 273) + 34.55
+        C = math.log10(Ca_CaCO3) - 0.4
+        D = math.log10(alcalinidade_CaCO3)
+        pHS = (9.3 + A + B) - (C + D)
+        return pHS
+
+    def calcular_indice_langelier(self, pH, pHS):
+        ISL = pH - pHS
+        return ISL
+
+    def calcular_indice_ryznar(self, pH, pHS):
+        IER = 2 * pHS - pH
+        return IER
+
+    def classificar_ier(self, IER):
+        if IER < 5.5:
+            return "Intensa formação de incrustações"
+        elif 5.5 <= IER < 6.2:
+            return "Formação de incrustação"
+        elif 6.2 <= IER < 6.8:
+            return "Sem dificuldades"
+        elif 6.8 <= IER < 8.5:
+            return "Água agressiva"
+        else:
+            return "Água muito agressiva"
+
+    def adicionar_dados(self, data, massa_inicial, massa_final, area, tempo, salinidade, meio_aquoso, STD, temp_C, Ca_CaCO3, alcalinidade_CaCO3, pH):
+        if meio_aquoso == 'sim':
+            pHS = self.calcular_pH_saturacao(STD, temp_C, Ca_CaCO3, alcalinidade_CaCO3)
+            ISL = self.calcular_indice_langelier(pH, pHS)
+            IER = self.calcular_indice_ryznar(pH, pHS)
+            classificacao_ier = self.classificar_ier(IER)
+        else:
+            pHS = ISL = IER = classificacao_ier = None
+
+        taxa_corrosao = self.calcular_taxa_corrosao(massa_inicial, massa_final, area, tempo, salinidade)
+        classificacao = self.classificar_taxa_corrosao(taxa_corrosao)
+        solucao = self.sugerir_solucao(classificacao)
+
+        self.dados.append({
+            'data': data,
+            'massa_inicial': massa_inicial,
+            'massa_final': massa_final,
+            'area': area,
+            'tempo': tempo,
+            'salinidade': salinidade,
+            'meio_aquoso': meio_aquoso,
+            'taxa_corrosao': taxa_corrosao,
+            'classificacao': classificacao,
+            'solucao': solucao,
+            'pH': pH if meio_aquoso == 'sim' else None,
+            'pHS': pHS,
+            'ISL': ISL,
+            'IER': IER,
+            'classificacao_ier': classificacao_ier
+        })
+
+    def gerar_grafico(self):
+        if not self.dados:
+            messagebox.showwarning("Atenção", "Nenhum dado adicionado. Adicione dados primeiro.")
+            return
+
+        df = pd.DataFrame(self.dados)
+        df['data'] = pd.to_datetime(df['data'])
+        df.set_index('data', inplace=True)
+        df['taxa_corrosao'].plot(marker='o')
+        plt.title(f'Taxa de Corrosão ao Longo do Tempo ({self.metal.capitalize()})')
+        plt.xlabel('Data')
+        plt.ylabel('Taxa de Corrosão (mm/ano)')
+        plt.grid(True)
+        plt.show()
+
+    def imprimir_dados(self):
+        if not self.dados:
+            messagebox.showwarning("Atenção", "Nenhum dado adicionado. Adicione dados primeiro.")
+            return
+
+        df = pd.DataFrame(self.dados)
+        print(df)
+
+        for index, row in df.iterrows():
+            print(f"\nSolução sugerida para a data {index}:")
+            print(row['solucao'])
+            print("=" * 50)
+
+class AplicacaoCorrosao:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("Monitoramento de Corrosão")
+        self.root.geometry('800x600')  # Defina o tamanho da janela
+
+        # Frame para os campos de entrada
+        self.frame_entrada = ttk.Frame(root)
+        self.frame_entrada.pack(padx=10, pady=10)
+
+        self.metal_label = ttk.Label(self.frame_entrada, text="Escolha um metal:")
+        self.metal_label.grid(row=0, column=0, padx=5, pady=5)
+        self.metal_var = tk.StringVar()
+        self.metal_combobox = ttk.Combobox(self.frame_entrada, textvariable=self.metal_var)
+        self.metal_combobox['values'] = ('aço-carbono', 'alumínio', 'cobre', 'zinco', 'ferro', 'latão', 'níquel', 'titânio')
+        self.metal_combobox.grid(row=0, column=1, padx=5, pady=5)
+
+        self.data_label = ttk.Label(self.frame_entrada, text="Data (YYYY-MM-DD):")
+        self.data_label.grid(row=1, column=0, padx=5, pady=5)
+        self.data_entry = ttk.Entry(self.frame_entrada)
+        self.data_entry.grid(row=1, column=1, padx=5, pady=5)
+
+        self.massa_inicial_label = ttk.Label(self.frame_entrada, text="Massa Inicial (g):")
+        self.massa_inicial_label.grid(row=2, column=0, padx=5, pady=5)
+        self.massa_inicial_entry = ttk.Entry(self.frame_entrada)
+        self.massa_inicial_entry.grid(row=2, column=1, padx=5, pady=5)
+
+        self.massa_final_label = ttk.Label(self.frame_entrada, text="Massa Final (g):")
+        self.massa_final_label.grid(row=3, column=0, padx=5, pady=5)
+        self.massa_final_entry = ttk.Entry(self.frame_entrada)
+        self.massa_final_entry.grid(row=3, column=1, padx=5, pady=5)
+
+        self.area_label = ttk.Label(self.frame_entrada, text="Área (cm²):")
+        self.area_label.grid(row=4, column=0, padx=5, pady=5)
+        self.area_entry = ttk.Entry(self.frame_entrada)
+        self.area_entry.grid(row=4, column=1, padx=5, pady=5)
+
+        self.tempo_label = ttk.Label(self.frame_entrada, text="Tempo (horas):")
+        self.tempo_label.grid(row=5, column=0, padx=5, pady=5)
+        self.tempo_entry = ttk.Entry(self.frame_entrada)
+        self.tempo_entry.grid(row=5, column=1, padx=5, pady=5)
+
+        self.salinidade_label = ttk.Label(self.frame_entrada, text="Salinidade (%):")
+        self.salinidade_label.grid(row=6, column=0, padx=5, pady=5)
+        self.salinidade_entry = ttk.Entry(self.frame_entrada)
+        self.salinidade_entry.grid(row=6, column=1, padx=5, pady=5)
+
+        self.meio_aquoso_label = ttk.Label(self.frame_entrada, text="Meio Aquoso (sim/não):")
+        self.meio_aquoso_label.grid(row=7, column=0, padx=5, pady=5)
+        self.meio_aquoso_var = tk.StringVar()
+        self.meio_aquoso_combobox = ttk.Combobox(self.frame_entrada, textvariable=self.meio_aquoso_var)
+        self.meio_aquoso_combobox['values'] = ('sim', 'não')
+        self.meio_aquoso_combobox.grid(row=7, column=1, padx=5, pady=5)
+
+        self.STD_label = ttk.Label(self.frame_entrada, text="STD:")
+        self.STD_label.grid(row=8, column=0, padx=5, pady=5)
+        self.STD_entry = ttk.Entry(self.frame_entrada)
+        self.STD_entry.grid(row=8, column=1, padx=5, pady=5)
+
+        self.temp_C_label = ttk.Label(self.frame_entrada, text="Temperatura (°C):")
+        self.temp_C_label.grid(row=9, column=0, padx=5, pady=5)
+        self.temp_C_entry = ttk.Entry(self.frame_entrada)
+        self.temp_C_entry.grid(row=9, column=1, padx=5, pady=5)
+
+        self.Ca_CaCO3_label = ttk.Label(self.frame_entrada, text="Cálcio (CaCO3) (mg/L):")
+        self.Ca_CaCO3_label.grid(row=10, column=0, padx=5, pady=5)
+        self.Ca_CaCO3_entry = ttk.Entry(self.frame_entrada)
+        self.Ca_CaCO3_entry.grid(row=10, column=1, padx=5, pady=5)
+
+        self.alcalinidade_CaCO3_label = ttk.Label(self.frame_entrada, text="Alcalinidade (CaCO3) (mg/L):")
+        self.alcalinidade_CaCO3_label.grid(row=11, column=0, padx=5, pady=5)
+        self.alcalinidade_CaCO3_entry = ttk.Entry(self.frame_entrada)
+        self.alcalinidade_CaCO3_entry.grid(row=11, column=1, padx=5, pady=5)
+
+        self.pH_label = ttk.Label(self.frame_entrada, text="pH:")
+        self.pH_label.grid(row=12, column=0, padx=5, pady=5)
+        self.pH_entry = ttk.Entry(self.frame_entrada)
+        self.pH_entry.grid(row=12, column=1, padx=5, pady=5)
+
+        self.adicionar_button = ttk.Button(self.frame_entrada, text="Adicionar Dados", command=self.adicionar_dados)
+        self.adicionar_button.grid(row=13, column=0, columnspan=2, pady=10)
+
+        self.gerar_grafico_button = ttk.Button(self.frame_entrada, text="Gerar Gráfico", command=self.gerar_grafico)
+        self.gerar_grafico_button.grid(row=14, column=0, columnspan=2, pady=10)
+
+        self.imprimir_dados_button = ttk.Button(self.frame_entrada, text="Imprimir Dados", command=self.imprimir_dados)
+        self.imprimir_dados_button.grid(row=15, column=0, columnspan=2, pady=10)
+
+    def adicionar_dados(self):
+        metal = self.metal_var.get()
+        data = self.data_entry.get()
+        massa_inicial = float(self.massa_inicial_entry.get())
+        massa_final = float(self.massa_final_entry.get())
+        area = float(self.area_entry.get())
+        tempo = float(self.tempo_entry.get())
+        salinidade = float(self.salinidade_entry.get())
+        meio_aquoso = self.meio_aquoso_var.get()
+        STD = float(self.STD_entry.get()) if meio_aquoso == 'sim' else None
+        temp_C = float(self.temp_C_entry.get()) if meio_aquoso == 'sim' else None
+        Ca_CaCO3 = float(self.Ca_CaCO3_entry.get()) if meio_aquoso == 'sim' else None
+        alcalinidade_CaCO3 = float(self.alcalinidade_CaCO3_entry.get()) if meio_aquoso == 'sim' else None
+        pH = float(self.pH_entry.get()) if meio_aquoso == 'sim' else None
+
+        monitoramento = CorrosaoMonitoramento(metal)
+        monitoramento.adicionar_dados(data, massa_inicial, massa_final, area, tempo, salinidade, meio_aquoso, STD, temp_C, Ca_CaCO3, alcalinidade_CaCO3, pH)
+        messagebox.showinfo("Sucesso", "Dados adicionados com sucesso!")
+
+    def gerar_grafico(self):
+        metal = self.metal_var.get()
+        monitoramento = CorrosaoMonitoramento(metal)
+        monitoramento.gerar_grafico()
+
+    def imprimir_dados(self):
+        metal = self.metal_var.get()
+        monitoramento = CorrosaoMonitoramento(metal)
+        monitoramento.imprimir_dados()
+
+if __name__ == "__main__":
+    root = tk.Tk()
+    app = AplicacaoCorrosao(root)
+    root.mainloop()
